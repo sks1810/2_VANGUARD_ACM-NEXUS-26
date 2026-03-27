@@ -44,9 +44,9 @@ def get_pothole_detections(video_path, model_path=DEFAULT_MODEL, conf=0.4, iou=0
                 y_center_norm = (y1 + y2) / 2 / h
                 score = 0.6 * bbox_area + 0.4 * (1 - y_center_norm)
 
-                if score < 0.002:
+                if score < 0.08:
                     severity = "Low"
-                elif score < 0.01:
+                elif score < 0.20:
                     severity = "Medium"
                 else:
                     severity = "High"
