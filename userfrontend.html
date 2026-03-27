@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SwiftDrop</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #020817;
+    --bg2: #0A1628;
+    --bg3: #070F1E;
+    --border: rgba(255,255,255,0.06);
+    --border2: rgba(255,255,255,0.1);
+    --text: #E2E8F0;
+    --text2: #94A3B8;
+    --text3: #475569;
+    --accent: #38BDF8;
+    --accent2: #6366F1;
+    --yellow: #F59E0B;
+    --blue: #3B82F6;
+    --green: #10B981;
+    --red: #EF4444;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  body {
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(2,8,23,0.96);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    padding: 14px 24px;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 12px;
+  }
+
+  .logo-wrap { display: flex; align-items: center; gap: 12px; }
+  .logo-icon { font-size: 26px; }
+  .logo-name { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+  .logo-sub { font-size: 11px; color: var(--text3); }
+
+  .header-right { display: flex; gap: 8px; align-items: center; }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 3px rgba(16,185,129,0.2);
+    animation: pulse-dot 2s infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(16,185,129,0.2); }
+    50% { box-shadow: 0 0 0 6px rgba(16,185,129,0.05); }
+  }
+  .live-label { font-size: 12px; color: var(--text3); margin-right: 4px; }
+  .divider { width: 1px; height: 20px; background: var(--border2); margin: 0 4px; }
+
+  .nav-btn {
+    padding: 8px 16px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border2);
+    background: transparent; color: var(--text3);
+    cursor: pointer; font-size: 13px; font-weight: 500;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .nav-btn.active { background: rgba(56,189,248,0.1); color: var(--accent); border-color: rgba(56,189,248,0.3); }
+  .nav-btn:hover:not(.active) { color: var(--text2); border-color: var(--border2); }
+
+  /* ── Stats Bar ── */
+  .stats-bar {
+    display: flex; gap: 12px;
+    padding: 16px 24px; overflow-x: auto;
+    max-width: 1200px; width: 100%; margin: 0 auto;
+  }
+  .stat-card {
+    flex: 1 1 110px; min-width: 90px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 4px; text-align: center;
+  }
+  .stat-icon { font-size: 20px; }
+  .stat-val { font-size: 24px; font-weight: 800; line-height: 1; }
+  .stat-lbl { font-size: 11px; color: var(--text3); }
+
+  /* ── Main ── */
+  main {
+    flex: 1; max-width: 1200px; width: 100%;
+    margin: 0 auto; padding: 12px 24px 48px;
+  }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ── Card ── */
+  .card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px;
+    box-shadow: 0 4px 40px rgba(0,0,0,0.4);
+  }
+
+  .card-header { margin-bottom: 28px; }
+  .card-icon { font-size: 28px; margin-bottom: 8px; }
+  .card-title { font-size: 22px; font-weight: 800; color: #F8FAFC; letter-spacing: -0.5px; margin-bottom: 4px; }
+  .card-sub { font-size: 13px; color: var(--text3); }
+
+  /* ── Form ── */
+  .order-form-wrap { max-width: 620px; margin: 0 auto; }
+
+  .field-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+  label.field-label { font-size: 13px; font-weight: 600; color: var(--text2); letter-spacing: 0.3px; }
+
+  select, input[type="date"] {
+    background: var(--bg3); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--radius-sm); padding: 12px 14px;
+    color: var(--text); font-size: 14px; outline: none;
+    width: 100%; transition: border-color 0.2s;
+    -webkit-appearance: none;
+  }
+  select:focus, input[type="date"]:focus { border-color: rgba(56,189,248,0.4); }
+  select option { background: #0A1628; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  .radio-group { display: flex; gap: 8px; flex-wrap: wrap; }
+  .radio-btn {
+    padding: 9px 14px; border-radius: var(--radius-sm);
+    border: 1px solid rgba(255,255,255,0.08); background: var(--bg3);
+    color: var(--text3); cursor: pointer; font-size: 13px; font-weight: 500;
+    user-select: none; transition: all 0.15s; white-space: nowrap;
+  }
+  .radio-btn.active { background: rgba(56,189,248,0.1); color: var(--accent); border-color: rgba(56,189,248,0.3); }
+  .radio-btn.express.active { background: rgba(251,191,36,0.1); color: #FBBF24; border-color: rgba(251,191,36,0.3); }
+
+  .slot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .slot-btn {
+    padding: 10px; border-radius: var(--radius-sm);
+    border: 1px solid rgba(255,255,255,0.08); background: var(--bg3);
+    color: var(--text3); cursor: pointer; font-size: 12px; font-weight: 500;
+    text-align: center; transition: all 0.15s;
+  }
+  .slot-btn.active { background: rgba(56,189,248,0.1); color: var(--accent); border-color: rgba(56,189,248,0.3); }
+
+  .eta-preview {
+    background: var(--bg3); border: 1px solid rgba(56,189,248,0.2);
+    border-radius: var(--radius-sm); padding: 14px 18px;
+    display: flex; flex-direction: column; gap: 4px; margin-bottom: 18px;
+  }
+  .eta-label { color: var(--text3); font-size: 13px; }
+  .eta-val { color: var(--accent); font-weight: 700; font-size: 20px; }
+  .eta-note { color: #64748B; font-size: 12px; }
+
+  .submit-btn {
+    width: 100%; padding: 14px; border-radius: var(--radius-sm);
+    border: none; background: linear-gradient(135deg, #0EA5E9, #6366F1);
+    color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+    transition: opacity 0.2s; letter-spacing: 0.3px;
+  }
+  .submit-btn:hover { opacity: 0.9; }
+  .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .success-banner {
+    background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3);
+    border-radius: var(--radius-sm); padding: 12px 16px;
+    color: #34D399; font-size: 13px; margin-bottom: 20px;
+    display: none;
+  }
+  .success-banner.show { display: block; }
+
+  /* ── Dashboard ── */
+  .dash-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
+  }
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; }
+  .filter-select, .filter-date {
+    background: var(--bg3); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--radius-sm); padding: 8px 12px;
+    color: var(--text); font-size: 13px; outline: none;
+  }
+  .clear-btn {
+    padding: 8px 12px; border-radius: var(--radius-sm);
+    border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.1);
+    color: #F87171; cursor: pointer; font-size: 12px; font-weight: 600;
+  }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; padding: 10px 14px;
+    color: var(--text3); font-weight: 600; font-size: 11px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    white-space: nowrap; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  td {
+    padding: 12px 14px; color: #CBD5E1; vertical-align: middle;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  tr.delayed { background: rgba(239,68,68,0.04); }
+  tr:hover { background: rgba(255,255,255,0.02); }
+
+  .order-id { font-family: monospace; font-size: 12px; color: var(--accent); }
+  .late-badge { font-size: 10px; color: #F87171; margin-left: 6px; }
+  .badge {
+    display: inline-block; padding: 3px 10px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px; font-size: 12px; color: var(--text2);
+  }
+  .badge.express { background: rgba(251,191,36,0.1); border-color: rgba(251,191,36,0.3); color: #FBBF24; }
+
+  .status-pill {
+    display: inline-block; padding: 4px 12px;
+    border-radius: 20px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.3px; white-space: nowrap;
+  }
+  .s-pending { color: var(--yellow); background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.25); }
+  .s-out { color: var(--blue); background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.25); }
+  .s-done { color: var(--green); background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.25); }
+
+  .eta-cell { display: flex; flex-direction: column; gap: 2px; }
+  .eta-time { color: #E2E8F0; font-weight: 600; font-size: 13px; }
+  .eta-countdown { color: var(--text3); font-size: 11px; }
+  .arriving-now { color: var(--green); font-size: 11px; }
+
+  .action-btn {
+    padding: 6px 12px; border-radius: var(--radius-sm);
+    border: 1px solid rgba(56,189,248,0.25); background: rgba(56,189,248,0.1);
+    color: var(--accent); font-size: 12px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; transition: all 0.15s;
+  }
+  .action-btn:hover { background: rgba(56,189,248,0.2); }
+  .done-check { color: var(--green); font-size: 12px; }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--text3);
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+  footer {
+    text-align: center; padding: 20px;
+    color: #1E293B; font-size: 12px;
+    border-top: 1px solid rgba(255,255,255,0.03);
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="logo-wrap">
+    <div class="logo-icon">🚀</div>
+    <div>
+      <div class="logo-name">SwiftDrop</div>
+      <div class="logo-sub">Delivery Management System</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live-dot"></div>
+    <span class="live-label">Live</span>
+    <div class="divider"></div>
+    <button class="nav-btn active" onclick="switchView('form',this)">📦 Place Order</button>
+    <button class="nav-btn" onclick="switchView('dashboard',this)">🚚 Dashboard</button>
+  </div>
+</header>
+
+<!-- ── Stats Bar ── -->
+<div class="stats-bar" id="stats-bar">
+  <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-val" id="s-total" style="color:#94A3B8">0</div><div class="stat-lbl">Total Orders</div></div>
+  <div class="stat-card"><div class="stat-icon">🟡</div><div class="stat-val" id="s-pending" style="color:#F59E0B">0</div><div class="stat-lbl">Pending</div></div>
+  <div class="stat-card"><div class="stat-icon">🔵</div><div class="stat-val" id="s-out" style="color:#3B82F6">0</div><div class="stat-lbl">Out for Delivery</div></div>
+  <div class="stat-card"><div class="stat-icon">🟢</div><div class="stat-val" id="s-done" style="color:#10B981">0</div><div class="stat-lbl">Delivered</div></div>
+  <div class="stat-card"><div class="stat-icon">⚡</div><div class="stat-val" id="s-express" style="color:#FBBF24">0</div><div class="stat-lbl">Express</div></div>
+</div>
+
+<!-- ── Main Content ── -->
+<main>
+  <!-- ORDER FORM -->
+  <div class="view active" id="view-form">
+    <div class="order-form-wrap">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon">📦</div>
+          <div class="card-title">New Delivery Order</div>
+          <div class="card-sub">Fill in the details to schedule your delivery</div>
+        </div>
+
+        <div class="success-banner" id="success-banner">✅ Order placed successfully!</div>
+
+        <!-- Location -->
+        <div class="field-group">
+          <label class="field-label">📍 Delivery Location</label>
+          <select id="f-location" onchange="updateETA()">
+            <option value="">— Select a location —</option>
+            <option value="downtown|nearby">Downtown Core (≤30 min)</option>
+            <option value="techpark|nearby">Tech Park (≤30 min)</option>
+            <option value="north|medium">North District (~60 min)</option>
+            <option value="east|medium">East Heights (~60 min)</option>
+            <option value="university|medium">University Area (~60 min)</option>
+            <option value="west|far">West Harbor (~90 min)</option>
+            <option value="south|far">South Valley (~90 min)</option>
+            <option value="airport|far">Airport Zone (~90 min)</option>
+          </select>
+        </div>
+
+        <!-- Date -->
+        <div class="field-group">
+          <label class="field-label">📅 Delivery Date</label>
+          <input type="date" id="f-date">
+        </div>
+
+        <!-- Size + Priority -->
+        <div class="grid-2">
+          <div class="field-group">
+            <label class="field-label">📦 Package Size</label>
+            <div class="radio-group" id="size-group">
+              <div class="radio-btn active" onclick="pickRadio('size-group',this,'Small')">Small</div>
+              <div class="radio-btn" onclick="pickRadio('size-group',this,'Medium')">Medium</div>
+              <div class="radio-btn" onclick="pickRadio('size-group',this,'Large')">Large</div>
+            </div>
+          </div>
+          <div class="field-group">
+            <label class="field-label">⚡ Priority</label>
+            <div class="radio-group" id="priority-group">
+              <div class="radio-btn active" onclick="pickRadio('priority-group',this,'Normal');updateETA()">Normal</div>
+              <div class="radio-btn express" onclick="pickRadio('priority-group',this,'Express');updateETA()">⚡ Express</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Time Slot -->
+        <div class="field-group">
+          <label class="field-label">🕐 Time Slot</label>
+          <div class="slot-grid" id="slot-group">
+            <div class="slot-btn active" onclick="pickSlot(this,'9:00 AM – 12:00 PM')">9:00 AM – 12:00 PM</div>
+            <div class="slot-btn" onclick="pickSlot(this,'12:00 PM – 3:00 PM')">12:00 PM – 3:00 PM</div>
+            <div class="slot-btn" onclick="pickSlot(this,'3:00 PM – 6:00 PM')">3:00 PM – 6:00 PM</div>
+            <div class="slot-btn" onclick="pickSlot(this,'6:00 PM – 9:00 PM')">6:00 PM – 9:00 PM</div>
+          </div>
+        </div>
+
+        <!-- ETA Preview -->
+        <div class="eta-preview" id="eta-preview" style="display:none">
+          <div class="eta-label">Estimated Arrival</div>
+          <div class="eta-val" id="eta-display">—</div>
+          <div class="eta-note" id="eta-note"></div>
+        </div>
+
+        <button class="submit-btn" id="submit-btn" onclick="placeOrder()">Place Order →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="view" id="view-dashboard">
+    <div class="card">
+      <div class="dash-header">
+        <div>
+          <div class="card-icon">🚚</div>
+          <div class="card-title">Live Orders</div>
+          <div class="card-sub" id="order-count-label">Loading...</div>
+        </div>
+        <div class="filters">
+          <select class="filter-select" id="filter-loc" onchange="renderTable()">
+            <option value="">All Locations</option>
+            <option value="downtown">Downtown Core</option>
+            <option value="techpark">Tech Park</option>
+            <option value="north">North District</option>
+            <option value="east">East Heights</option>
+            <option value="university">University Area</option>
+            <option value="west">West Harbor</option>
+            <option value="south">South Valley</option>
+            <option value="airport">Airport Zone</option>
+          </select>
+          <input type="date" class="filter-date" id="filter-date" onchange="renderTable()">
+          <button class="clear-btn" onclick="clearFilters()">✕ Clear</button>
+        </div>
+      </div>
+      <div id="table-container">
+        <div class="empty-state"><div class="empty-icon">⏳</div><div>Connecting to Firebase...</div></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>SwiftDrop · Firebase Firestore · Real-time · 2026</footer>
+
+<script>
+// ── Firebase Config ────────────────────────────────────────
+// 🔑 Replace these values with your own Firebase project config:
+// Firebase Console → Project Settings → Your apps → SDK setup
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ── State ──────────────────────────────────────────────────
+let allOrders = [];
+let currentSize = 'Small';
+let currentPriority = 'Normal';
+let currentSlot = '9:00 AM – 12:00 PM';
+
+// ── UI Utils ───────────────────────────────────────────────
+function switchView(id, btn) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function pickRadio(groupId, el, val) {
+  document.querySelectorAll('#' + groupId + ' .radio-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  if (groupId === 'size-group') currentSize = val;
+  if (groupId === 'priority-group') currentPriority = val;
+}
+
+function pickSlot(el, val) {
+  document.querySelectorAll('#slot-group .slot-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  currentSlot = val;
+}
+
+// ── ETA Logic ─────────────────────────────────────────────
+const DIST_MINS = { nearby: 30, medium: 60, far: 90 };
+const LOC_NAMES = {
+  downtown: 'Downtown Core', techpark: 'Tech Park', north: 'North District',
+  east: 'East Heights', university: 'University Area', west: 'West Harbor',
+  south: 'South Valley', airport: 'Airport Zone'
+};
+
+function calcETA(locationVal, priority) {
+  const parts = locationVal.split('|');
+  const dist = parts[1] || 'medium';
+  const base = DIST_MINS[dist] || 60;
+  const mins = priority === 'Express' ? Math.round(base * 0.65) : base;
+  const eta = new Date(Date.now() + mins * 60000);
+  return eta.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function updateETA() {
+  const loc = document.getElementById('f-location').value;
+  const preview = document.getElementById('eta-preview');
+  if (!loc) { preview.style.display = 'none'; return; }
+  preview.style.display = 'flex';
+  document.getElementById('eta-display').textContent = calcETA(loc, currentPriority);
+  document.getElementById('eta-note').textContent = currentPriority === 'Express'
+    ? '⚡ Express priority applied — 35% faster'
+    : 'Standard routing';
+}
+
+function genOrderId() {
+  return 'ORD-' + Date.now().toString(36).toUpperCase() +
+    Math.random().toString(36).slice(2,5).toUpperCase();
+}
+
+// ── Place Order ────────────────────────────────────────────
+async function placeOrder() {
+  const locRaw = document.getElementById('f-location').value;
+  const date = document.getElementById('f-date').value;
+  if (!locRaw) return alert('Please select a delivery location.');
+  if (!date) return alert('Please select a delivery date.');
+
+  const locKey = locRaw.split('|')[0];
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true; btn.textContent = 'Placing Order...';
+
+  const orderId = genOrderId();
+  const eta = calcETA(locRaw, currentPriority);
+
+  const order = {
+    orderId, eta,
+    location: locKey,
+    date,
+    size: currentSize,
+    priority: currentPriority,
+    timeSlot: currentSlot,
+    status: 'Pending',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  try {
+    await db.collection('orders').add(order);
+    const banner = document.getElementById('success-banner');
+    banner.textContent = '✅ Order ' + orderId + ' placed successfully!';
+    banner.classList.add('show');
+    setTimeout(() => banner.classList.remove('show'), 5000);
+    // Reset form
+    document.getElementById('f-location').value = '';
+    document.getElementById('eta-preview').style.display = 'none';
+  } catch(err) {
+    alert('Error: ' + err.message);
+  }
+
+  btn.disabled = false; btn.textContent = 'Place Order →';
+}
+
+// ── Status Update ──────────────────────────────────────────
+const STATUS_NEXT = { 'Pending': 'Out for Delivery', 'Out for Delivery': 'Delivered' };
+
+async function updateStatus(docId, newStatus) {
+  try {
+    await db.collection('orders').doc(docId).update({ status: newStatus });
+  } catch(err) {
+    alert('Update failed: ' + err.message);
+  }
+}
+
+// ── Real-time Listener ────────────────────────────────────
+db.collection('orders')
+  .orderBy('createdAt', 'desc')
+  .onSnapshot(snap => {
+    allOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    updateStats();
+    renderTable();
+  }, err => {
+    document.getElementById('table-container').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">⚠️</div><div style="color:#F87171">Firebase error: ' + err.message + '<br><small style="color:#475569">Check your Firebase config in the code</small></div></div>';
+  });
+
+// ── Stats ─────────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('s-total').textContent = allOrders.length;
+  document.getElementById('s-pending').textContent = allOrders.filter(o => o.status === 'Pending').length;
+  document.getElementById('s-out').textContent = allOrders.filter(o => o.status === 'Out for Delivery').length;
+  document.getElementById('s-done').textContent = allOrders.filter(o => o.status === 'Delivered').length;
+  document.getElementById('s-express').textContent = allOrders.filter(o => o.priority === 'Express').length;
+}
+
+// ── Countdown ─────────────────────────────────────────────
+function minsUntil(etaStr) {
+  try {
+    const [time, ampm] = etaStr.split(' ');
+    const [h, m] = time.split(':').map(Number);
+    let hour = h % 12 + (ampm === 'PM' ? 12 : 0);
+    const target = new Date();
+    target.setHours(hour, m, 0, 0);
+    return Math.round((target - Date.now()) / 60000);
+  } catch { return null; }
+}
+
+function isDelayed(order) {
+  if (order.status === 'Delivered') return false;
+  const m = minsUntil(order.eta);
+  return m !== null && m < 0;
+}
+
+// ── Filters ───────────────────────────────────────────────
+function clearFilters() {
+  document.getElementById('filter-loc').value = '';
+  document.getElementById('filter-date').value = '';
+  renderTable();
+}
+
+// ── Render Table ──────────────────────────────────────────
+function renderTable() {
+  const filterLoc = document.getElementById('filter-loc').value;
+  const filterDate = document.getElementById('filter-date').value;
+
+  const filtered = allOrders.filter(o => {
+    if (filterLoc && o.location !== filterLoc) return false;
+    if (filterDate && o.date !== filterDate) return false;
+    return true;
+  });
+
+  document.getElementById('order-count-label').textContent =
+    allOrders.length + ' total · updates in real-time';
+
+  const container = document.getElementById('table-container');
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div>No orders found</div></div>';
+    return;
+  }
+
+  const statusClass = { 'Pending': 's-pending', 'Out for Delivery': 's-out', 'Delivered': 's-done' };
+
+  let rows = filtered.map(o => {
+    const delayed = isDelayed(o);
+    const mins = minsUntil(o.eta);
+    const sc = statusClass[o.status] || 's-pending';
+    const next = STATUS_NEXT[o.status];
+    const locName = LOC_NAMES[o.location] || o.location;
+
+    let countdownHtml = '';
+    if (o.status !== 'Delivered' && mins !== null) {
+      if (mins <= 0) countdownHtml = '<div class="arriving-now">Arriving now</div>';
+      else countdownHtml = '<div class="eta-countdown">~' + mins + 'm away</div>';
+    }
+
+    let actionHtml = next
+      ? <button class="action-btn" onclick="updateStatus('${o.id}','${next}')">→ ${next === 'Out for Delivery' ? 'Dispatch' : 'Deliver'}</button>
+      : '<span class="done-check">✓ Done</span>';
+
+    return `
+      <tr class="${delayed ? 'delayed' : ''}">
+        <td><span class="order-id">${o.orderId || o.id.slice(0,8).toUpperCase()}</span>${delayed ? '<span class="late-badge">⚠ LATE</span>' : ''}</td>
+        <td>${locName}</td>
+        <td>${o.date || '—'}</td>
+        <td><span class="badge">${o.size}</span></td>
+        <td><span class="badge ${o.priority === 'Express' ? 'express' : ''}">${o.priority === 'Express' ? '⚡ Express' : 'Normal'}</span></td>
+        <td style="font-size:12px;color:#64748B">${o.timeSlot}</td>
+        <td><span class="status-pill ${sc}">${o.status}</span></td>
+        <td><div class="eta-cell"><span class="eta-time">${o.eta}</span>${countdownHtml}</div></td>
+        <td>${actionHtml}</td>
+      </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Order ID</th><th>Location</th><th>Date</th>
+            <th>Size</th><th>Priority</th><th>Time Slot</th>
+            <th>Status</th><th>ETA</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  // Refresh countdowns every 30s
+  setTimeout(() => renderTable(), 30000);
+}
+
+// ── Init date field ────────────────────────────────────────
+document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+document.getElementById('f-date').min = new Date().toISOString().split('T')[0];
+</script>
+</body>
+</html>
