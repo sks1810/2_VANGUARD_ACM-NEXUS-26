@@ -1,29 +1,38 @@
-import cv2
 import os
+import cv2
+import numpy as np
 from ultralytics import YOLO
 
-def get_pothole_detections(video_path, model_path, conf=0.4, iou=0.5, max_frames=100):
-    if not os.path.exists(model_path):
-        print(f"❌ Model not found: {model_path}")
-        return []
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+DEFAULT_MODEL = os.path.join(BASE_DIR, "models", "best.pt")
 
-    if not os.path.exists(video_path):
-        print(f"❌ Video not found: {video_path}")
-        return []
+_model = None
 
-    model = YOLO(model_path)
+def _load_model(model_path):
+    global _model
+    if _model is None:
+        _model = YOLO(model_path)
+    return _model
+
+def get_pothole_detections(video_path, model_path=DEFAULT_MODEL, conf=0.4, iou=0.5, max_frames=100):
+    model = _load_model(model_path)
     cap = cv2.VideoCapture(video_path)
-    all_detections = []
-    frame_count = 0
+    if not cap.isOpened():
+        raise RuntimeError(f"Cannot open video: {video_path}")
 
-    while cap.isOpened() and frame_count < max_frames:
+    detections = []
+    frame_num = 0
+
+    while cap.isOpened() and frame_num < max_frames:
         ret, frame = cap.read()
         if not ret:
             break
 
-        frame_h = frame.shape[0]
+        frame_num += 1
+        h = frame.shape[0]
         results = model.predict(frame, conf=conf, iou=iou, imgsz=640, verbose=False)
 
+        frame_detections = []
         for result in results:
             if result.boxes is None:
                 continue
@@ -31,35 +40,28 @@ def get_pothole_detections(video_path, model_path, conf=0.4, iou=0.5, max_frames
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 confidence = float(box.conf[0])
 
-                bbox_area = (x2 - x1) * (y2 - y1) / (frame_h ** 2)
-                y_center_norm = (y1 + y2) / 2 / frame_h
-                severity_score = 0.6 * bbox_area + 0.4 * (1 - y_center_norm)
+                bbox_area = (x2 - x1) * (y2 - y1) / (h ** 2)
+                y_center_norm = (y1 + y2) / 2 / h
+                score = 0.6 * bbox_area + 0.4 * (1 - y_center_norm)
 
-                if severity_score < 0.002:
+                if score < 0.002:
                     severity = "Low"
-                elif severity_score < 0.01:
+                elif score < 0.01:
                     severity = "Medium"
                 else:
                     severity = "High"
 
-                all_detections.append({
-                    "class": "pothole",
-                    "confidence": round(confidence, 2),
-                    "severity": severity,
-                    "frame": frame_count
+                frame_detections.append({
+                    "bbox": [x1, y1, x2, y2],
+                    "confidence": round(confidence, 3),
+                    "severity": severity
                 })
 
-        frame_count += 1
+        if frame_detections:
+            detections.append({
+                "frame": frame_num,
+                "potholes": frame_detections
+            })
 
     cap.release()
-    return all_detections
-
-
-if __name__ == "__main__":
-    detections = get_pothole_detections(
-        video_path="test.mp4",
-        model_path="models/yolov12n.pt"
-    )
-    print(f"✅ Potholes detected: {len(detections)}")
-    for d in detections[:5]:
-        print(d)
+    return detections
