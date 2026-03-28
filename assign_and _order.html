@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SwiftDrop</title>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <!-- Google Places API -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAMqo3YmyQgyTfgbKBtzQYZ7demtSfyi7I
+&libraries=places"></script>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <div>
+    <h2>🚀 SwiftDrop</h2>
+    <small>Delivery Management System</small>
+  </div>
+
+  <div>
+    <button onclick="switchView('form')">📦 Place Order</button>
+    <button onclick="switchView('dashboard')">🚚 Dashboard</button>
+  </div>
+</header>
+
+<!-- STATS -->
+<div class="stats-bar">
+  <div onclick="filterOrders('all')">Total: <span id="s-total">0</span></div>
+  <div onclick="filterOrders('Pending')">Pending: <span id="s-pending">0</span></div>
+  <div onclick="filterOrders('Out for Delivery')">Out: <span id="s-out">0</span></div>
+  <div onclick="filterOrders('Delivered')">Done: <span id="s-done">0</span></div>
+</div>
+
+<main>
+
+<!-- FORM -->
+<div id="view-form" class="view active">
+  <div class="card">
+    <h2>New Order</h2>
+
+    <input type="text" id="f-location" placeholder="Select location" autocomplete="off" />
+    <input type="date" id="f-date">
+
+    <button onclick="placeOrder()">Place Order</button>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="view-dashboard" class="view">
+  <div class="card">
+    <h2>Orders</h2>
+    <div id="table-container"></div>
+  </div>
+</div>
+
+</main>
+
+<script src="script.js"></script>
+</body>
+</html>
