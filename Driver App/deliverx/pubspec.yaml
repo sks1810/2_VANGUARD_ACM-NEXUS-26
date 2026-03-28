@@ -1,0 +1,41 @@
+name: deliverx
+description: A driver navigation and delivery execution app
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Firebase
+  firebase_core: ^4.6.0
+  cloud_firestore: ^6.2.0
+
+  # Maps & navigation
+  google_maps_flutter: ^2.16.0
+  geolocator: ^14.0.2
+  flutter_polyline_points: ^3.1.0
+
+  # Networking
+  http: ^1.6.0
+
+  # State management
+  flutter_riverpod: ^2.6.1
+
+  # Permissions
+  permission_handler: ^12.0.1
+
+  # Utilities
+  intl: ^0.20.2
+  uuid: ^4.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

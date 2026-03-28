@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "925844379832",
+    "firebase_url": "https://vanguard-5632c-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "vanguard-5632c",
+    "storage_bucket": "vanguard-5632c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:925844379832:android:d17e0c252ad5abbf45fc4d",
+        "android_client_info": {
+          "package_name": "com.example.deliverx"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB5Y4y_RWneThGVMi9P6l80iCf1wfB6AoI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
