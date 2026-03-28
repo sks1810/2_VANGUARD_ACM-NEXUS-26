@@ -1,7 +1,7 @@
+fastapi
+uvicorn
 ultralytics
 opencv-python
-flask
-flask-cors
 requests
 python-dotenv
-numpy
+firebase-admin

@@ -16,3 +16,10 @@ __pycache__/
 *.pyc
 *.pyo
 runs/
+
+# IDE/OS
+.vscode/
+.DS_Store
+*.log
+
+backend/firebase_key.json

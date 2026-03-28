@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS — Smart Delivery Routing</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body { height: 100%; overflow: hidden; margin: 0; padding: 0; }
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Space+Mono:wght@700&display=swap');
+        :root {
+            --dark: #0f1419; --surface: #1a1f2e; --border: #2a3142;
+            --text-primary: #f0f2f5; --text-secondary: #b0b8c1;
+            --primary: #00d084; --accent: #ffa502; --blue: #0099ff; --danger: #ff4757;
+        }
+        body { font-family:'Poppins',sans-serif; background:var(--dark); color:var(--text-primary); }
+        .container { display:flex; height:100vh; }
+
+        /* ── PANEL ── */
+        .control-panel {
+            width:460px; min-width:460px;
+            background:linear-gradient(180deg,var(--surface) 0%,#16192a 100%);
+            border-right:1px solid var(--border);
+            display:flex; flex-direction:column; gap:10px;
+            overflow-y:auto; padding:16px;
+            box-shadow:4px 0 24px rgba(0,0,0,0.4); z-index:1000;
+        }
+        .control-panel::-webkit-scrollbar { width:4px; }
+        .control-panel::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+        .brand { display:flex; align-items:center; gap:10px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+        .brand-logo { font-size:26px; }
+        .brand-name { font-size:20px; font-weight:700; color:var(--primary); }
+        .brand-sub  { font-size:10px; color:var(--text-secondary); letter-spacing:2px; text-transform:uppercase; }
+
+        .section-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--text-secondary); margin-bottom:4px; }
+
+        /* ── MAP LOADING ── */
+        .map-loading { position:absolute; inset:0; background:rgba(15,20,25,0.92); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999; gap:14px; }
+        .map-loading.hidden { display:none; }
+        .spinner { width:42px; height:42px; border:3px solid var(--border); border-top-color:var(--primary); border-radius:50%; animation:spin 0.8s linear infinite; }
+        .loading-text { color:var(--text-secondary); font-size:13px; text-align:center; max-width:300px; line-height:1.6; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+
+        /* ── STATUS BANNERS ── */
+        .status-banner { padding:10px 12px; border-radius:8px; font-size:12px; display:flex; align-items:center; gap:8px; }
+        .banner-loading { background:rgba(0,153,255,0.1); border:1px solid rgba(0,153,255,0.3); color:var(--blue); }
+        .banner-error   { background:rgba(255,71,87,0.1);  border:1px solid rgba(255,71,87,0.3);  color:var(--danger); }
+        .banner-success { background:rgba(0,208,132,0.1);  border:1px solid rgba(0,208,132,0.3);  color:var(--primary); }
+
+        /* ── DRIVER SECTION ── */
+        .driver-section {
+            border-radius:12px; overflow:hidden;
+            border:2px solid var(--border); margin-bottom:10px;
+            transition:all 0.3s;
+        }
+        .driver-section.analyzing { animation:borderPulse 1s infinite; }
+        .driver-section.done      { box-shadow:0 0 18px rgba(0,0,0,0.3); }
+
+        .driver-header {
+            display:flex; align-items:center; gap:10px;
+            padding:12px 14px; cursor:pointer;
+        }
+        .driver-color-bar { width:5px; height:36px; border-radius:3px; flex-shrink:0; }
+        .driver-avatar {
+            width:34px; height:34px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center;
+            font-size:14px; font-weight:700; flex-shrink:0; border:2px solid;
+        }
+        .driver-info { flex:1; }
+        .driver-name  { font-weight:700; font-size:14px; }
+        .driver-meta  { font-size:10px; color:var(--text-secondary); margin-top:1px; }
+        .driver-badge { font-size:10px; font-weight:700; padding:3px 10px; border-radius:10px; flex-shrink:0; }
+
+        .driver-body { display:none; border-top:1px solid var(--border); padding:10px 12px 14px; }
+        .driver-body.open { display:block; }
+
+        /* ── ORDER CARDS ── */
+        .order-card {
+            background:rgba(255,255,255,0.03); border:1px solid var(--border);
+            border-radius:8px; padding:8px 10px; margin-bottom:6px;
+            transition:all 0.25s; cursor:pointer;
+        }
+        .order-card:hover { background:rgba(255,255,255,0.06); transform:translateX(3px); }
+        .order-card.selected { transform:translateX(5px); }
+        .order-card.best  { border-left-width:3px; }
+
+        .order-top  { display:flex; align-items:center; gap:8px; }
+        .order-seq  { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; }
+        .order-loc  { flex:1; font-size:12px; font-weight:600; }
+        .order-id   { font-family:'Space Mono',monospace; font-size:9px; color:var(--blue); margin-top:2px; }
+        .delay-chip { font-family:'Space Mono',monospace; font-size:11px; font-weight:700; padding:2px 7px; border-radius:5px; flex-shrink:0; }
+        .delay-green  { background:rgba(0,208,132,0.15); color:var(--primary); }
+        .delay-orange { background:rgba(255,165,2,0.15);  color:var(--accent); }
+        .delay-red    { background:rgba(255,71,87,0.15);  color:var(--danger); }
+
+        /* route sub-options */
+        .route-sub { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
+        .route-pill {
+            padding:3px 9px; border-radius:12px; font-size:10px; font-weight:600;
+            border:1px solid var(--border); cursor:pointer; transition:all 0.2s;
+            background:rgba(255,255,255,0.04); color:var(--text-secondary);
+        }
+        .route-pill:hover   { opacity:1 !important; transform:scale(1.05); }
+        .route-pill.active  { color:#000; font-weight:700; }
+
+        /* ── NAVIGATE BUTTON ── */
+        .navigate-btn {
+            margin-top:10px; width:100%; padding:9px;
+            border:none; border-radius:8px; color:#000;
+            font-family:'Poppins',sans-serif; font-size:12px; font-weight:700;
+            cursor:pointer; transition:all 0.2s;
+            display:flex; align-items:center; justify-content:center; gap:6px;
+        }
+        .navigate-btn:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,0.3); }
+
+        /* ── SEQUENCE SUMMARY per driver ── */
+        .driver-summary {
+            margin-top:10px; padding:10px;
+            background:rgba(255,255,255,0.04); border-radius:8px;
+            border:1px solid var(--border); display:none;
+        }
+        .driver-summary.show { display:block; }
+        .summary-row { display:flex; gap:10px; margin-bottom:6px; }
+        .summary-stat { flex:1; text-align:center; }
+        .summary-stat-val { font-family:'Space Mono',monospace; font-weight:700; font-size:14px; }
+        .summary-stat-lbl { font-size:9px; color:var(--text-secondary); margin-top:2px; }
+
+        /* ── OVERALL SUMMARY ── */
+        .overall-summary { display:none; background:rgba(0,208,132,0.08); border:1px solid rgba(0,208,132,0.3); border-radius:10px; padding:12px; }
+        .overall-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--text-secondary); margin-bottom:8px; }
+        .overall-grid  { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+        .sum-item { text-align:center; }
+        .sum-val  { font-family:'Space Mono',monospace; font-weight:700; font-size:14px; color:var(--primary); }
+        .sum-lbl  { font-size:9px; color:var(--text-secondary); margin-top:2px; }
+        .firebase-badge { display:inline-flex; align-items:center; gap:5px; background:rgba(255,165,2,0.15); border:1px solid var(--accent); border-radius:5px; padding:4px 8px; font-size:10px; color:var(--accent); margin-top:8px; }
+
+        /* ── TRACKING ── */
+        .tracking-panel { display:none; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:8px; padding:12px; flex-direction:column; gap:8px; }
+        .status-box { text-align:center; padding:8px; border-radius:6px; font-weight:600; font-size:12px; border:1px solid; }
+        .progress-bar  { width:100%; height:5px; background:var(--border); border-radius:3px; overflow:hidden; }
+        .progress-fill { height:100%; width:0%; transition:width 0.08s; }
+        .info-row { display:flex; justify-content:space-between; font-size:11px; padding:4px 0; border-bottom:1px solid var(--border); }
+        .info-row:last-child { border:none; }
+        .info-lbl { color:var(--text-secondary); }
+        .info-val { font-family:'Space Mono',monospace; font-weight:700; }
+        .alert-box { display:none; border-radius:6px; padding:8px 12px; font-size:11px; font-weight:600; text-align:center; animation:alertPulse 1s infinite; }
+        .alert-pothole  { background:rgba(255,71,87,0.15); border:1px solid var(--danger); color:#ff6b7a; }
+        .alert-accident { background:rgba(255,165,2,0.15); border:1px solid var(--accent);  color:var(--accent); }
+
+        /* ── WEATHER ── */
+        .weather-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; }
+        .weather-item  { background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:6px; padding:7px; text-align:center; }
+        .weather-val   { font-family:'Space Mono',monospace; font-weight:700; font-size:11px; color:var(--primary); }
+        .weather-lbl   { font-size:9px; color:var(--text-secondary); margin-top:1px; }
+
+        /* ── BUTTONS ── */
+        .main-btn { padding:13px; border:none; border-radius:8px; cursor:pointer; font-weight:700; font-size:13px; font-family:'Poppins',sans-serif; transition:all 0.3s; display:flex; align-items:center; justify-content:center; gap:8px; }
+        .btn-blue  { background:linear-gradient(135deg,var(--blue),#0066cc); color:#fff; }
+        .main-btn:hover    { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,0.3); }
+        .main-btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; box-shadow:none; }
+
+        /* ── MAP ── */
+        .map-container { flex:1; position:relative; }
+        #map { width:100%; height:100%; }
+
+        /* ── DRIVER MAP LEGEND ── */
+        .map-legend {
+            position:absolute; bottom:30px; left:20px; z-index:1000;
+            background:rgba(26,31,46,0.95); border:1px solid var(--border);
+            border-radius:10px; padding:10px 14px; display:none;
+            box-shadow:0 4px 20px rgba(0,0,0,0.4);
+        }
+        .map-legend.show { display:block; }
+        .legend-title { font-size:10px; font-weight:700; text-transform:uppercase; color:var(--text-secondary); margin-bottom:6px; }
+        .legend-item  { display:flex; align-items:center; gap:8px; font-size:11px; margin-bottom:4px; cursor:pointer; padding:3px 5px; border-radius:5px; transition:background 0.2s; }
+        .legend-item:hover { background:rgba(255,255,255,0.06); }
+        .legend-dot   { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+        .legend-name  { font-weight:600; }
+        .legend-count { font-size:9px; color:var(--text-secondary); margin-left:auto; }
+
+        /* ── TOAST ── */
+        .toast { position:fixed; bottom:20px; right:20px; z-index:99999; padding:12px 18px; border-radius:10px; font-family:'Poppins',sans-serif; font-size:13px; font-weight:700; box-shadow:0 4px 20px rgba(0,0,0,0.4); animation:slideIn 0.3s ease; pointer-events:none; color:#fff; }
+        @keyframes slideIn    { from{transform:translateX(120%)} to{transform:translateX(0)} }
+        @keyframes alertPulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+        @keyframes borderPulse{ 0%,100%{border-color:var(--blue)} 50%{border-color:rgba(0,153,255,0.3)} }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="control-panel">
+        <div class="brand">
+            <div class="brand-logo">📦</div>
+            <div>
+                <div class="brand-name">NEXUS</div>
+                <div class="brand-sub">Smart Delivery Routing</div>
+            </div>
+        </div>
+
+        <!-- Weather -->
+        <div>
+            <div class="section-title">🌤️ Live Conditions</div>
+            <div class="weather-strip" id="weatherStrip" style="opacity:0.4">
+                <div class="weather-item"><div class="weather-val" id="wTemp">—</div><div class="weather-lbl">Temp °C</div></div>
+                <div class="weather-item"><div class="weather-val" id="wWind">—</div><div class="weather-lbl">Wind km/h</div></div>
+                <div class="weather-item"><div class="weather-val" id="wVis">—</div><div class="weather-lbl">Visibility</div></div>
+                <div class="weather-item"><div class="weather-val" id="wRain">—</div><div class="weather-lbl">Rain mm/h</div></div>
+                <div class="weather-item"><div class="weather-val" id="wCong">—</div><div class="weather-lbl">Congestion</div></div>
+                <div class="weather-item"><div class="weather-val" id="wWeather">—</div><div class="weather-lbl">Weather</div></div>
+            </div>
+        </div>
+
+        <!-- Drivers + Orders -->
+        <div>
+            <div class="section-title">🚗 Drivers & Assigned Orders</div>
+            <div id="ordersStatus"></div>
+            <div id="driverSections"></div>
+        </div>
+
+        <!-- Analyze -->
+        <button class="main-btn btn-blue" id="analyzeBtn" onclick="analyzeAll()" disabled>
+            🤖 Optimize All Drivers via AI
+        </button>
+
+        <!-- Overall Summary -->
+        <div class="overall-summary" id="overallSummary">
+            <div class="overall-title">✅ Optimized Plan Saved</div>
+            <div class="overall-grid">
+                <div class="sum-item"><div class="sum-val" id="sumDrivers">—</div><div class="sum-lbl">Drivers</div></div>
+                <div class="sum-item"><div class="sum-val" id="sumOrders">—</div><div class="sum-lbl">Orders</div></div>
+                <div class="sum-item"><div class="sum-val" id="sumDelay">—</div><div class="sum-lbl">Avg Delay</div></div>
+            </div>
+            <div class="firebase-badge">🔥 Written to Firestore</div>
+        </div>
+
+        <!-- Tracking -->
+        <div class="tracking-panel" id="trackingPanel">
+            <div class="status-box" id="statusText" style="background:rgba(0,208,132,0.1);border-color:rgba(0,208,132,0.3);color:var(--primary)">🚚 In Transit</div>
+            <div class="alert-box alert-pothole"  id="potholeAlert"></div>
+            <div class="alert-box alert-accident" id="accidentAlert"></div>
+            <div class="info-row"><span class="info-lbl">Driver</span><span class="info-val" id="activeDriverName" style="font-size:10px">—</span></div>
+            <div class="info-row"><span class="info-lbl">Route</span><span class="info-val" id="activeRouteName"  style="font-size:10px">—</span></div>
+            <div class="info-row"><span class="info-lbl">Speed</span><span class="info-val" id="speedValue">—</span></div>
+            <div class="info-row"><span class="info-lbl">Progress</span><span class="info-val" id="progressValue">0%</span></div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        </div>
+    </div>
+
+    <div class="map-container">
+        <div id="map"></div>
+        <!-- Driver Legend on Map -->
+        <div class="map-legend" id="mapLegend">
+            <div class="legend-title">🚗 Drivers</div>
+            <div id="legendItems"></div>
+        </div>
+        <div class="map-loading" id="mapLoading">
+            <div class="spinner"></div>
+            <div class="loading-text" id="loadingText">Connecting to backend...</div>
+            <div style="color:#3a4255;font-size:11px" id="loadingSub">Loading from Firestore</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════
+const BACKEND_URL       = 'http://127.0.0.1:8000';
+const ARRIVAL_THRESHOLD = 25;
+const SPEED_NORMAL      = 12;
+const SPEED_MODERATE    = 5;
+const SPEED_SEVERE      = 2;
+const POTHOLE_RADIUS    = 60;
+
+// ✅ One distinct color palette per driver
+const DRIVER_PALETTES = [
+    { primary:'#00d084', dark:'#009960', bg:'rgba(0,208,132,0.12)',   text:'#000' },
+    { primary:'#0099ff', dark:'#0066cc', bg:'rgba(0,153,255,0.12)',   text:'#fff' },
+    { primary:'#ffa502', dark:'#cc8400', bg:'rgba(255,165,2,0.12)',   text:'#000' },
+    { primary:'#a29bfe', dark:'#6c5ce7', bg:'rgba(162,155,254,0.12)', text:'#000' },
+    { primary:'#ff6b9d', dark:'#cc4477', bg:'rgba(255,107,157,0.12)', text:'#fff' },
+    { primary:'#fd79a8', dark:'#e84393', bg:'rgba(253,121,168,0.12)', text:'#000' },
+];
+
+const DARK_STYLE = [
+    { elementType:'geometry',               stylers:[{ color:'#1a1f2e' }] },
+    { elementType:'labels.text.stroke',     stylers:[{ color:'#1a1f2e' }] },
+    { elementType:'labels.text.fill',       stylers:[{ color:'#b0b8c1' }] },
+    { featureType:'road',                   elementType:'geometry',         stylers:[{ color:'#2e3650' }] },
+    { featureType:'road.arterial',          elementType:'geometry',         stylers:[{ color:'#38475e' }] },
+    { featureType:'road.highway',           elementType:'geometry',         stylers:[{ color:'#3d5068' }] },
+    { featureType:'road.highway',           elementType:'geometry.stroke',  stylers:[{ color:'#1f3a54' }] },
+    { featureType:'road',                   elementType:'labels.text.fill', stylers:[{ color:'#9ca5b3' }] },
+    { featureType:'water',                  elementType:'geometry',         stylers:[{ color:'#0d1b2e' }] },
+    { featureType:'poi',                    elementType:'geometry',         stylers:[{ color:'#1e2538' }] },
+    { featureType:'poi.park',               elementType:'geometry',         stylers:[{ color:'#172318' }] },
+    { featureType:'transit',                elementType:'geometry',         stylers:[{ color:'#2f3948' }] },
+    { featureType:'administrative',         elementType:'geometry.stroke',  stylers:[{ color:'#3b5070' }] },
+    { featureType:'administrative.locality',elementType:'labels.text.fill', stylers:[{ color:'#d59563' }] },
+];
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let map, directionsService, infoWindow;
+let truckMarker = null;
+let isSimulating = false, animationId = null;
+let currentPosition, distanceCovered = 0, lastTimestamp = null;
+let effectiveSpeed  = SPEED_NORMAL;
+let activeRouteData = null;
+let livePayload     = null;
+let driversData     = [];     // from Firestore
+let analysisResults = {};     // driverId → { orders with results }
+let activeDriverId  = null;
+
+// ══════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════
+function haversineMeters(p1,p2) {
+    const R=6371000,dLat=(p2.lat-p1.lat)*Math.PI/180,dLng=(p2.lng-p1.lng)*Math.PI/180;
+    const a=Math.sin(dLat/2)**2+Math.cos(p1.lat*Math.PI/180)*Math.cos(p2.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function makeSVGIcon(emoji, size=32) {
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><text y="${size*0.82}" font-size="${size*0.82}">${emoji}</text></svg>`;
+    return { url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg), scaledSize:new google.maps.Size(size,size), anchor:new google.maps.Point(size/2,size/2) };
+}
+function makeColoredPinIcon(color, label, size=36) {
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size+10}" viewBox="0 0 ${size} ${size+10}">
+        <circle cx="${size/2}" cy="${size/2}" r="${size/2-2}" fill="${color}" stroke="white" stroke-width="2"/>
+        <text x="${size/2}" y="${size/2+5}" font-family="Arial" font-size="12" font-weight="bold" fill="white" text-anchor="middle">${label}</text>
+        <polygon points="${size/2-5},${size-2} ${size/2+5},${size-2} ${size/2},${size+8}" fill="${color}"/>
+    </svg>`;
+    return { url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg), scaledSize:new google.maps.Size(size,size+10), anchor:new google.maps.Point(size/2,size+8) };
+}
+function showToast(text, bg='#00d084') {
+    const t=document.createElement('div'); t.className='toast';
+    t.style.background=bg; t.textContent=text;
+    document.body.appendChild(t); setTimeout(()=>t.remove(),4000);
+}
+function getPalette(idx) { return DRIVER_PALETTES[idx % DRIVER_PALETTES.length]; }
+
+// ══════════════════════════════════════════
+//  ✅ LOAD ORDERS FROM FIRESTORE
+// ══════════════════════════════════════════
+async function loadOrdersFromDB() {
+    const el = document.getElementById('ordersStatus');
+    el.innerHTML = `<div class="status-banner banner-loading"><div class="spinner" style="width:14px;height:14px;border-width:2px"></div> Loading orders from Firestore...</div>`;
+    try {
+        const res  = await fetch(`${BACKEND_URL}/orders`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        driversData = data.drivers || [];
+        if (driversData.length === 0) {
+            el.innerHTML = `<div class="status-banner banner-error">⚠️ No assigned orders found in Firestore.<br><small>Check <b>assigned_orders</b> collection.</small></div>`;
+            return false;
+        }
+        const totalOrders = driversData.reduce((s,d)=>s+d.orders.length,0);
+        el.innerHTML = `<div class="status-banner banner-success">✅ ${driversData.length} driver${driversData.length>1?'s':''} · ${totalOrders} orders loaded</div>`;
+        return true;
+    } catch(e) {
+        el.innerHTML = `<div class="status-banner banner-error">❌ ${e.message}</div>`;
+        return false;
+    }
+}
+
+// ══════════════════════════════════════════
+//  RENDER DRIVER SECTIONS
+// ══════════════════════════════════════════
+function renderDriverSections() {
+    const container = document.getElementById('driverSections');
+    container.innerHTML = '';
+
+    driversData.forEach((driver, dIdx) => {
+        const pal  = getPalette(dIdx);
+        const sec  = document.createElement('div');
+        sec.className = 'driver-section';
+        sec.id        = `driver-sec-${driver.driver_id}`;
+        sec.style.borderColor = pal.primary + '55';
+
+        sec.innerHTML = `
+            <div class="driver-header" onclick="toggleDriver('${driver.driver_id}')">
+                <div class="driver-color-bar" style="background:${pal.primary}"></div>
+                <div class="driver-avatar" style="background:${pal.bg};border-color:${pal.primary};color:${pal.primary}">
+                    ${driver.driver_name.charAt(driver.driver_name.length-1)}
+                </div>
+                <div class="driver-info">
+                    <div class="driver-name">${driver.driver_name}</div>
+                    <div class="driver-meta">📍 Hub: ${driver.hub} &nbsp;·&nbsp; 📦 ${driver.orders.length} orders &nbsp;·&nbsp; 📅 ${driver.date}</div>
+                </div>
+                <div class="driver-badge" id="badge-${driver.driver_id}"
+                     style="background:${pal.bg};color:${pal.primary};border:1px solid ${pal.primary}55">
+                    ⏳ Pending
+                </div>
+            </div>
+            <div class="driver-body" id="body-${driver.driver_id}">
+                <div id="orders-list-${driver.driver_id}">
+                    ${driver.orders.map(o => `
+                        <div class="order-card" id="order-card-${o.id}"
+                             onclick="focusOrder('${driver.driver_id}','${o.id}')">
+                            <div class="order-top">
+                                <div class="order-seq" style="background:${pal.bg};color:${pal.primary};border:1.5px solid ${pal.primary}">
+                                    —
+                                </div>
+                                <div style="flex:1">
+                                    <div class="order-loc">${o.location || o.formatted_address || 'Unknown'}</div>
+                                    <div class="order-id">#${o.id.substring(0,12)}...</div>
+                                </div>
+                                <div class="delay-chip" id="chip-${o.id}">—</div>
+                            </div>
+                            <div class="route-sub" id="routes-${o.id}"></div>
+                        </div>
+                    `).join('')}
+                </div>
+                <!-- Per-driver summary -->
+                <div class="driver-summary" id="summary-${driver.driver_id}">
+                    <div class="summary-row">
+                        <div class="summary-stat"><div class="summary-stat-val" id="s-delay-${driver.driver_id}" style="color:${pal.primary}">—</div><div class="summary-stat-lbl">Total Delay</div></div>
+                        <div class="summary-stat"><div class="summary-stat-val" id="s-time-${driver.driver_id}"  style="color:${pal.primary}">—</div><div class="summary-stat-lbl">Total Time</div></div>
+                        <div class="summary-stat"><div class="summary-stat-val" id="s-stops-${driver.driver_id}" style="color:${pal.primary}">—</div><div class="summary-stat-lbl">Stops</div></div>
+                    </div>
+                </div>
+                <!-- Navigate button -->
+                <div id="nav-area-${driver.driver_id}"></div>
+            </div>`;
+        container.appendChild(sec);
+    });
+}
+
+function toggleDriver(driverId) {
+    const body = document.getElementById(`body-${driverId}`);
+    body.classList.toggle('open');
+    if (body.classList.contains('open')) focusDriverOnMap(driverId);
+}
+
+// ══════════════════════════════════════════
+//  DRAW MAP — routes per driver
+// ══════════════════════════════════════════
+async function drawMap() {
+    const bounds = new google.maps.LatLngBounds();
+    const legendItems = document.getElementById('legendItems');
+    legendItems.innerHTML = '';
+
+    for (let dIdx = 0; dIdx < driversData.length; dIdx++) {
+        const driver = driversData[dIdx];
+        const pal    = getPalette(dIdx);
+        driver._palette  = pal;
+        driver._polylines = {};    // orderId → [gPolyline, ...]
+        driver._routeData = {};    // orderId → [{ coords, label, distance, gPolyline }]
+
+        // Hub marker
+        const hubPos = { lat: driver.hub_lat, lng: driver.hub_lng };
+        new google.maps.Marker({
+            position: hubPos, map,
+            icon: makeColoredPinIcon(pal.primary, 'HUB', 32),
+            title: `${driver.driver_name} Hub — ${driver.hub}`, zIndex: 100
+        }).addListener('click', () => {
+            infoWindow.setContent(`<b>🏭 ${driver.driver_name}</b><br>Hub: ${driver.hub}`);
+            infoWindow.setPosition(hubPos); infoWindow.open(map);
+        });
+        bounds.extend(hubPos);
+
+        // Orders
+        for (let oIdx = 0; oIdx < driver.orders.length; oIdx++) {
+            const order   = driver.orders[oIdx];
+            const destPos = { lat: order.lat, lng: order.lng };
+            driver._routeData[order.id] = [];
+
+            document.getElementById('loadingText').textContent =
+                `${driver.driver_name}: fetching route (${oIdx+1}/${driver.orders.length}) ${order.location || ''}`;
+
+            // Destination marker
+            const destMarker = new google.maps.Marker({
+                position: destPos, map,
+                icon: makeColoredPinIcon(pal.primary, oIdx+1+'', 28),
+                title: `${order.location}`, zIndex: 80
+            });
+            destMarker.addListener('click', () => {
+                infoWindow.setContent(
+                    `<b style="color:${pal.primary}">${driver.driver_name}</b><br>
+                     📍 ${order.location}<br>
+                     <small style="color:#0099ff">#${order.id}</small><br>
+                     Status: ${order.status}`
+                );
+                infoWindow.setPosition(destPos); infoWindow.open(map);
+            });
+            bounds.extend(destPos);
+
+            // ✅ Get Google Maps route alternatives
+            const alts = await fetchRouteAlternatives(hubPos, destPos);
+
+            alts.forEach((alt, rIdx) => {
+                // Fade alternate routes slightly
+                const opacity  = rIdx === 0 ? 0.75 : 0.35;
+                const weight   = rIdx === 0 ? 5    : 3;
+                const color    = rIdx === 0 ? pal.primary : pal.dark;
+
+                const gPolyline = new google.maps.Polyline({
+                    path: alt.path, strokeColor: color,
+                    strokeOpacity: opacity, strokeWeight: weight,
+                    map, zIndex: rIdx === 0 ? 12 : 8
+                });
+
+                gPolyline.addListener('click', (e) => {
+                    infoWindow.setContent(
+                        `<b style="color:${pal.primary}">${driver.driver_name}</b><br>
+                         ${order.location}<br>${alt.summary} — ${alt.distance.toFixed(1)} km`
+                    );
+                    infoWindow.setPosition(e.latLng); infoWindow.open(map);
+                    selectOrderRoute(driver.driver_id, order.id, rIdx);
+                });
+
+                driver._routeData[order.id].push({
+                    coords:   alt.path,
+                    label:    alt.summary,
+                    distance: alt.distance,
+                    duration: alt.duration,
+                    gPolyline
+                });
+
+                alt.path.forEach(p => bounds.extend(p));
+            });
+
+            // Render route pills in order card
+            renderRoutePills(driver, order.id, pal);
+        }
+
+        // Add to map legend
+        legendItems.innerHTML += `
+            <div class="legend-item" onclick="focusDriverOnMap('${driver.driver_id}')">
+                <div class="legend-dot" style="background:${pal.primary}"></div>
+                <span class="legend-name">${driver.driver_name}</span>
+                <span class="legend-count">${driver.orders.length} stops</span>
+            </div>`;
+    }
+
+    // Load detections
+    await loadRealDetections();
+
+    document.getElementById('mapLoading').classList.add('hidden');
+    document.getElementById('mapLegend').classList.add('show');
+    map.fitBounds(bounds, { padding:60 });
+    document.getElementById('analyzeBtn').disabled = false;
+    document.getElementById('analyzeBtn').textContent = '🤖 Optimize All Drivers via AI';
+}
+
+function renderRoutePills(driver, orderId, pal) {
+    const container = document.getElementById(`routes-${orderId}`);
+    if (!container) return;
+    const routes = driver._routeData[orderId] || [];
+    container.innerHTML = routes.map((r, i) => `
+        <div class="route-pill" id="pill-${orderId}-${i}"
+             onclick="event.stopPropagation();selectOrderRoute('${driver.driver_id}','${orderId}',${i})"
+             style="border-color:${i===0?pal.primary:'#2a3142'}">
+            ${r.label} · ${r.distance.toFixed(1)}km
+        </div>
+    `).join('');
+}
+
+// ══════════════════════════════════════════
+//  ROUTE FETCHING
+// ══════════════════════════════════════════
+function fetchRouteAlternatives(origin, destination) {
+    return new Promise((resolve) => {
+        directionsService.route({
+            origin, destination,
+            travelMode:               google.maps.TravelMode.DRIVING,
+            provideRouteAlternatives: true
+        }, (result, status) => {
+            if (status === 'OK') {
+                resolve(result.routes.slice(0,2).map(r => ({
+                    path:     r.overview_path.map(p=>({lat:p.lat(),lng:p.lng()})),
+                    summary:  r.summary || 'Route',
+                    distance: r.legs[0].distance.value / 1000,
+                    duration: r.legs[0].duration.value / 60
+                })));
+            } else {
+                resolve([{
+                    path:[origin,destination], summary:'Direct',
+                    distance: haversineMeters(origin,destination)/1000, duration:20
+                }]);
+            }
+        });
+    });
+}
+
+// ══════════════════════════════════════════
+//  SELECT ROUTE — highlight on map
+// ══════════════════════════════════════════
+function selectOrderRoute(driverId, orderId, routeIdx) {
+    const driver = driversData.find(d => d.driver_id === driverId);
+    if (!driver) return;
+    const routes = driver._routeData[orderId] || [];
+    const pal    = driver._palette;
+
+    routes.forEach((r, i) => {
+        const isSelected = i === routeIdx;
+        r.gPolyline.setOptions({
+            strokeColor:   isSelected ? pal.primary : '#555',
+            strokeWeight:  isSelected ? 7 : 3,
+            strokeOpacity: isSelected ? 0.95 : 0.15,
+            zIndex:        isSelected ? 30 : 5
+        });
+        const pill = document.getElementById(`pill-${orderId}-${i}`);
+        if (pill) {
+            pill.classList.toggle('active', isSelected);
+            pill.style.background     = isSelected ? pal.primary : 'rgba(255,255,255,0.04)';
+            pill.style.borderColor    = isSelected ? pal.primary : '#2a3142';
+            pill.style.color          = isSelected ? pal.text    : '#b0b8c1';
+        }
+    });
+
+    if (routes[routeIdx]) {
+        const bounds = new google.maps.LatLngBounds();
+        routes[routeIdx].coords.forEach(c => bounds.extend(c));
+        map.fitBounds(bounds, { padding:80 });
+        startTruck(routes[routeIdx], orderId, driver);
+    }
+}
+
+function focusOrder(driverId, orderId) {
+    const driver = driversData.find(d => d.driver_id === driverId);
+    if (!driver?._routeData[orderId]?.length) return;
+    selectOrderRoute(driverId, orderId, 0);
+}
+
+function focusDriverOnMap(driverId) {
+    const driver = driversData.find(d => d.driver_id === driverId);
+    if (!driver) return;
+    const bounds = new google.maps.LatLngBounds();
+    bounds.extend({ lat:driver.hub_lat, lng:driver.hub_lng });
+    driver.orders.forEach(o => {
+        bounds.extend({ lat:o.lat, lng:o.lng });
+        Object.values(driver._routeData||{}).forEach(routes =>
+            routes.forEach(r => r.coords.forEach(c => bounds.extend(c)))
+        );
+    });
+    map.fitBounds(bounds, { padding:60 });
+
+    // Highlight this driver's routes, dim others
+    driversData.forEach(d => {
+        const isActive = d.driver_id === driverId;
+        Object.values(d._routeData||{}).forEach(routes =>
+            routes.forEach((r,i) => r.gPolyline.setOptions({
+                strokeOpacity: isActive ? (i===0?0.85:0.35) : 0.08,
+                zIndex:        isActive ? 15 : 3
+            }))
+        );
+    });
+}
+
+// ══════════════════════════════════════════
+//  API CALLS
+// ══════════════════════════════════════════
+async function fetchLivePayload() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/payload`);
+        return await res.json();
+    } catch {
+        const h = new Date().getHours();
+        return { route_length_km:5.0, average_speed_kmph:28.0, traffic_density:200,
+                 congestion_index:0.2, hour_of_day:h,
+                 peak_hour_flag:[7,8,9,17,18,19].includes(h)?1:0,
+                 rain_intensity_mm_per_hr:0.0, visibility_m:10000,
+                 weather_type:'clear', wind_speed_kmph:10.0, temperature_c:30.0 };
+    }
+}
+
+async function predictDelay(payload) {
+    try {
+        const res = await fetch(`${BACKEND_URL}/predict_delay`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        });
+        return await res.json();
+    } catch {
+        const base  = payload.route_length_km * 3.5;
+        const delay = parseFloat((base*(1+payload.congestion_index*0.5)+payload.accident_present*12).toFixed(2));
+        return { delay_minutes:delay, travel_time_minutes:parseFloat((base+delay).toFixed(2)) };
+    }
+}
+
+// ══════════════════════════════════════════
+//  ✅ ANALYZE ALL DRIVERS
+// ══════════════════════════════════════════
+async function analyzeAll() {
+    const btn = document.getElementById('analyzeBtn');
+    btn.disabled    = true;
+    btn.textContent = '⏳ Optimizing delivery routes...';
+    document.getElementById('overallSummary').style.display = 'none';
+    if (animationId) cancelAnimationFrame(animationId);
+    if (truckMarker) { truckMarker.setMap(null); truckMarker=null; }
+    document.getElementById('trackingPanel').style.display = 'none';
+
+    livePayload = await fetchLivePayload();
+    updateWeatherUI(livePayload);
+    analysisResults = {};
+
+    let grandTotalDelay = 0, grandTotalTime = 0, grandOrders = 0;
+
+    for (let dIdx=0; dIdx < driversData.length; dIdx++) {
+        const driver = driversData[dIdx];
+        const pal    = driver._palette;
+
+        // Mark analyzing
+        document.getElementById(`driver-sec-${driver.driver_id}`).className = 'driver-section analyzing';
+        document.getElementById(`badge-${driver.driver_id}`).textContent     = '🔄 Analyzing...';
+        document.getElementById(`body-${driver.driver_id}`).classList.add('open');
+
+        const orderResults = {};
+
+        // Predict delay for each route of each order
+        for (const order of driver.orders) {
+            const routes = driver._routeData[order.id] || [];
+            const routeDelays = [];
+
+            for (const route of routes) {
+                const payload = {
+                    ...livePayload,
+                    route_length_km:  route.distance,
+                    accident_present: 0,
+                    strike_activity_level:0, protest_or_event_flag:0, road_block_flag:0
+                };
+                const result = await predictDelay(payload);
+                routeDelays.push({ route, ...result });
+            }
+
+            // Best route = minimum delay
+            routeDelays.sort((a,b) => a.delay_minutes - b.delay_minutes);
+            const best = routeDelays[0];
+            orderResults[order.id] = {
+                best_route_idx: routes.indexOf(best.route),
+                best_route:     best.route,
+                delay:          best.delay_minutes,
+                time:           best.travel_time_minutes,
+                all_delays:     routeDelays
+            };
+
+            // Show delay chip
+            const chip = document.getElementById(`chip-${order.id}`);
+            if (chip) {
+                const pct = best.delay_minutes / 20;
+                chip.className   = `delay-chip ${pct<0.3?'delay-green':pct<0.6?'delay-orange':'delay-red'}`;
+                chip.textContent = `+${best.delay_minutes.toFixed(1)}m`;
+            }
+
+            // Highlight best route pill
+            selectBestRoutePill(driver, order.id, routes.indexOf(best.route), pal);
+        }
+
+        // ✅ Sort orders by minimum delay = optimized delivery sequence
+        const sortedOrders = [...driver.orders].sort(
+            (a,b) => orderResults[a.id].delay - orderResults[b.id].delay
+        );
+
+        // Assign delivery_order and update UI
+        sortedOrders.forEach((order, seqIdx) => {
+            order.delivery_order = seqIdx + 1;
+            // Update sequence number in card
+            const seq = document.querySelector(`#order-card-${order.id} .order-seq`);
+            if (seq) seq.textContent = seqIdx + 1;
+            // Add best class to card
+            const card = document.getElementById(`order-card-${order.id}`);
+            if (card) {
+                card.style.borderLeft = `3px solid ${pal.primary}`;
+                card.style.borderLeftColor = pal.primary;
+            }
+            // Highlight best polyline on map
+            selectBestPolyline(driver, order.id, orderResults[order.id].best_route_idx, pal);
+        });
+
+        const driverDelay = sortedOrders.reduce((s,o)=>s+orderResults[o.id].delay,0);
+        const driverTime  = sortedOrders.reduce((s,o)=>s+orderResults[o.id].time, 0);
+        grandTotalDelay  += driverDelay;
+        grandTotalTime   += driverTime;
+        grandOrders      += driver.orders.length;
+
+        // Show per-driver summary
+        document.getElementById(`s-delay-${driver.driver_id}`).textContent = driverDelay.toFixed(1)+'m';
+        document.getElementById(`s-time-${driver.driver_id}`).textContent  = driverTime.toFixed(0)+'m';
+        document.getElementById(`s-stops-${driver.driver_id}`).textContent = driver.orders.length;
+        document.getElementById(`summary-${driver.driver_id}`).classList.add('show');
+
+        // Add navigate button
+        addNavigateButton(driver, sortedOrders[0], orderResults, pal);
+
+        // Update badge
+        document.getElementById(`driver-sec-${driver.driver_id}`).className = 'driver-section done';
+        document.getElementById(`driver-sec-${driver.driver_id}`).style.borderColor = pal.primary;
+        document.getElementById(`badge-${driver.driver_id}`).textContent    = `✅ Optimized`;
+        document.getElementById(`badge-${driver.driver_id}`).style.background = pal.bg;
+        document.getElementById(`badge-${driver.driver_id}`).style.color      = pal.primary;
+
+        analysisResults[driver.driver_id] = { sortedOrders, orderResults, driverDelay, driverTime };
+    }
+
+    document.getElementById('sumDrivers').textContent = driversData.length;
+    document.getElementById('sumOrders').textContent  = grandOrders;
+    document.getElementById('sumDelay').textContent   = (grandTotalDelay/driversData.length).toFixed(1)+'m';
+    document.getElementById('overallSummary').style.display = 'block';
+
+    // ✅ Write back to Firestore
+    await saveDeliveryPlan(grandTotalDelay, grandTotalTime);
+
+    btn.disabled    = false;
+    btn.textContent = '🔄 Re-optimize All Drivers';
+}
+
+function selectBestRoutePill(driver, orderId, bestIdx, pal) {
+    (driver._routeData[orderId]||[]).forEach((r,i) => {
+        const pill = document.getElementById(`pill-${orderId}-${i}`);
+        if (!pill) return;
+        const isBest = i === bestIdx;
+        pill.classList.toggle('active', isBest);
+        pill.style.background  = isBest ? pal.primary : 'rgba(255,255,255,0.04)';
+        pill.style.borderColor = isBest ? pal.primary : '#2a3142';
+        pill.style.color       = isBest ? pal.text    : '#b0b8c1';
+    });
+}
+
+function selectBestPolyline(driver, orderId, bestIdx, pal) {
+    (driver._routeData[orderId]||[]).forEach((r,i) => {
+        const isBest = i === bestIdx;
+        r.gPolyline.setOptions({
+            strokeColor:   isBest ? pal.primary : '#666',
+            strokeWeight:  isBest ? 6 : 2,
+            strokeOpacity: isBest ? 0.88 : 0.20,
+            zIndex:        isBest ? 20 : 5
+        });
+    });
+}
+
+function addNavigateButton(driver, firstOrder, orderResults, pal) {
+    const area = document.getElementById(`nav-area-${driver.driver_id}`);
+    if (!area || document.getElementById(`nav-btn-${driver.driver_id}`)) return;
+    const btn = document.createElement('button');
+    btn.className = 'navigate-btn';
+    btn.id        = `nav-btn-${driver.driver_id}`;
+    btn.style.background = `linear-gradient(135deg,${pal.primary},${pal.dark})`;
+    btn.style.color      = pal.text;
+    btn.innerHTML = `▶ Navigate ${driver.driver_name}'s Route`;
+    btn.onclick = (e) => {
+        e.stopPropagation();
+        const r   = orderResults[firstOrder.id];
+        const idx = r.best_route_idx;
+        selectOrderRoute(driver.driver_id, firstOrder.id, idx);
+        focusDriverOnMap(driver.driver_id);
+        showToast(`🚚 Navigating ${driver.driver_name}'s optimized route`, pal.primary);
+    };
+    area.appendChild(btn);
+}
+
+// ══════════════════════════════════════════
+//  ✅ SAVE DELIVERY PLAN TO FIRESTORE
+// ══════════════════════════════════════════
+async function saveDeliveryPlan(totalDelay, totalTime) {
+    const driversPayload = driversData.map(driver => {
+        const res = analysisResults[driver.driver_id];
+        if (!res) return null;
+        return {
+            driver_id:   driver.driver_id,
+            driver_name: driver.driver_name,
+            hub:         driver.hub,
+            date:        driver.date,
+            total_delay: parseFloat(res.driverDelay.toFixed(2)),
+            total_time:  parseFloat(res.driverTime.toFixed(2)),
+            orders: res.sortedOrders.map(order => ({
+                order_id:       order.id,       // ← Firestore document ID written back
+                location:       order.location || order.formatted_address,
+                lat:            order.lat,
+                lng:            order.lng,
+                delivery_order: order.delivery_order,
+                best_route:     res.orderResults[order.id].best_route.label,
+                estimated_delay:parseFloat(res.orderResults[order.id].delay.toFixed(2)),
+                estimated_time: parseFloat(res.orderResults[order.id].time.toFixed(2))
+            }))
+        };
+    }).filter(Boolean);
+
+    try {
+        const res  = await fetch(`${BACKEND_URL}/delivery_plan/save`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+                drivers:     driversPayload,
+                created_at:  new Date().toISOString(),
+                total_delay: parseFloat(totalDelay.toFixed(2)),
+                total_time:  parseFloat(totalTime.toFixed(2))
+            })
+        });
+        const data = await res.json();
+        if (data.status?.includes('saved')) {
+            showToast(`🔥 ${driversPayload.length} driver plans saved to Firestore!`, '#ffa502');
+        }
+    } catch(e) { console.warn('Save failed:', e); }
+}
+
+// ══════════════════════════════════════════
+//  TRUCK ANIMATION
+// ══════════════════════════════════════════
+function startTruck(route, orderId, driver) {
+    if (truckMarker) truckMarker.setMap(null);
+    if (animationId) cancelAnimationFrame(animationId);
+    if (!route.coords?.length) return;
+
+    const pal = driver._palette;
+    activeRouteData  = route;
+    activeRouteData.potholes  = [];
+    activeRouteData.accidents = [];
+
+    truckMarker = new google.maps.Marker({
+        position: route.coords[0], map,
+        icon: makeSVGIcon('🚚', 38), zIndex:200
+    });
+
+    const order = driver.orders.find(o=>o.id===orderId);
+
+    document.getElementById('trackingPanel').style.display = 'flex';
+    document.getElementById('trackingPanel').style.borderColor = pal.primary+'55';
+    document.getElementById('statusText').style.background  = pal.bg;
+    document.getElementById('statusText').style.borderColor = pal.primary+'55';
+    document.getElementById('statusText').style.color       = pal.primary;
+    document.getElementById('progressFill').style.background= `linear-gradient(90deg,${pal.primary},${pal.dark})`;
+    document.getElementById('activeDriverName').textContent = driver.driver_name;
+    document.getElementById('activeRouteName').textContent  = route.label;
+
+    currentPosition = { ...route.coords[0] };
+    distanceCovered = 0; lastTimestamp = null; isSimulating = true;
+    document.getElementById('progressFill').style.width  = '0%';
+    document.getElementById('progressValue').textContent = '0%';
+    document.getElementById('statusText').innerHTML = `🚚 ${driver.driver_name} → ${order?.location || ''}`;
+
+    animationId = requestAnimationFrame(ts => animateTruck(ts, order?.location||'Destination', pal));
+}
+
+function animateTruck(timestamp, dest, pal) {
+    if (!isSimulating || !activeRouteData) return;
+    if (lastTimestamp===null) lastTimestamp=timestamp;
+    const delta = (timestamp-lastTimestamp)/1000;
+    lastTimestamp = timestamp;
+
+    effectiveSpeed   = SPEED_NORMAL;
+    distanceCovered += delta * effectiveSpeed;
+
+    const coords = activeRouteData.coords;
+    let covered=0, segIdx=0;
+    for (let i=0;i<coords.length-1;i++) {
+        const seg=haversineMeters(coords[i],coords[i+1]);
+        if (covered+seg<distanceCovered) { covered+=seg; segIdx=i+1; }
+        else {
+            const ratio=(distanceCovered-covered)/seg;
+            currentPosition={
+                lat:coords[i].lat+(coords[i+1].lat-coords[i].lat)*ratio,
+                lng:coords[i].lng+(coords[i+1].lng-coords[i].lng)*ratio
+            };
+            break;
+        }
+    }
+
+    if (truckMarker) truckMarker.setPosition(currentPosition);
+    const progress=Math.min((segIdx/(coords.length-1))*100,100);
+    document.getElementById('progressFill').style.width  = progress+'%';
+    document.getElementById('progressValue').textContent = progress.toFixed(1)+'%';
+    document.getElementById('speedValue').innerHTML =
+        `<span style="color:${pal.primary}">${(effectiveSpeed*3.6).toFixed(0)} km/h</span>`;
+
+    const distToEnd=haversineMeters(currentPosition,coords[coords.length-1]);
+    document.getElementById('statusText').innerHTML =
+        `🚚 To <b>${dest}</b> — ${distToEnd<1000?distToEnd.toFixed(0)+'m':(distToEnd/1000).toFixed(2)+'km'} left`;
+
+    if (distToEnd < ARRIVAL_THRESHOLD) {
+        isSimulating=false;
+        document.getElementById('statusText').innerHTML = `<div style="color:#2ed573">✅ Arrived at ${dest}!</div>`;
+        document.getElementById('progressFill').style.width='100%';
+        document.getElementById('progressValue').textContent='100%';
+        showToast(`✅ Arrived at ${dest}!`, pal.primary);
+    } else {
+        animationId=requestAnimationFrame(ts=>animateTruck(ts,dest,pal));
+    }
+}
+
+// ══════════════════════════════════════════
+//  REAL DETECTIONS
+// ══════════════════════════════════════════
+async function loadRealDetections() {
+    try {
+        const data = await (await fetch(`${BACKEND_URL}/detections`)).json();
+        data.forEach(d => {
+            const SEV={ high:'#ff4757',medium:'#ffa502',low:'#ffeb3b' };
+            const pos={ lat:d.lat, lng:d.lng };
+            new google.maps.Circle({ center:pos,radius:d.type==='pothole'?POTHOLE_RADIUS:80,map,
+                strokeColor:d.type==='pothole'?SEV[d.severity]:'#ff4757',strokeOpacity:0.8,strokeWeight:2,
+                fillColor:d.type==='pothole'?SEV[d.severity]:'#ff4757',fillOpacity:0.25 });
+            const m=new google.maps.Marker({position:pos,map,icon:makeSVGIcon(d.type==='pothole'?'🕳️':'🚨',22),zIndex:60,animation:google.maps.Animation.DROP});
+            m.addListener('click',()=>{
+                infoWindow.setContent(`<b>${d.type==='pothole'?'🕳️':'🚨'} ${d.label}</b><br>Confidence:${d.confidence}<br>${d.timestamp}`);
+                infoWindow.setPosition(pos); infoWindow.open(map);
+            });
+        });
+    } catch(e) { console.warn('Detections fetch failed',e); }
+}
+
+// ══════════════════════════════════════════
+//  WEATHER UI
+// ══════════════════════════════════════════
+function updateWeatherUI(p) {
+    document.getElementById('wTemp').textContent    = p.temperature_c??'—';
+    document.getElementById('wWind').textContent    = p.wind_speed_kmph??'—';
+    document.getElementById('wVis').textContent     = p.visibility_m>=1000?(p.visibility_m/1000).toFixed(1)+'km':(p.visibility_m??'—')+'m';
+    document.getElementById('wRain').textContent    = p.rain_intensity_mm_per_hr??'—';
+    document.getElementById('wCong').textContent    = p.congestion_index??'—';
+    document.getElementById('wWeather').textContent = p.weather_type??'—';
+    document.getElementById('weatherStrip').style.opacity='1';
+}
+
+// ══════════════════════════════════════════
+//  WEBSOCKET
+// ══════════════════════════════════════════
+function connectLiveFeed() {
+    const ws = new WebSocket('ws://127.0.0.1:8000/ws/live');
+
+    ws.onopen = () => console.log('🔴 Live feed connected');
+
+    ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === 'new_detection') {
+            const d   = msg.detection;
+            const pos = { lat: d.lat, lng: d.lng };
+            const SEV = { high:'#ff4757', medium:'#ffa502', low:'#ffeb3b' };
+            const emoji = d.type === 'pothole' ? '🕳️' : '🚨';
+            const color = d.type === 'pothole' ? SEV[d.severity] : '#ff4757';
+
+            new google.maps.Circle({
+                center: pos, radius: d.type==='pothole' ? POTHOLE_RADIUS : 80, map,
+                strokeColor: color, strokeOpacity: 0.8, strokeWeight: 2,
+                fillColor: color, fillOpacity: 0.25
+            });
+            const m = new google.maps.Marker({
+                position: pos, map,
+                icon: makeSVGIcon(emoji, 22), zIndex: 60,
+                animation: google.maps.Animation.DROP
+            });
+            m.addListener('click', () => {
+                infoWindow.setContent(
+                    `<b>${emoji} ${d.label}</b><br>Type: ${d.type}<br>
+                     Severity: ${d.severity?.toUpperCase()??'N/A'}<br>
+                     Confidence: ${d.confidence}<br>
+                     <small>${d.timestamp}</small>`
+                );
+                infoWindow.setPosition(pos);
+                infoWindow.open(map);
+            });
+            showToast(
+                d.type === 'pothole'
+                    ? `🕳️ New ${d.severity} pothole detected!`
+                    : `🚨 Accident detected!`,
+                d.type === 'pothole' ? '#ff4757' : '#ffa502'
+            );
+        }
+
+        if (msg.type === 'truck_location') {
+            const pos = { lat: msg.lat, lng: msg.lng };
+            if (!truckMarker) {
+                truckMarker = new google.maps.Marker({
+                    position: pos, map,
+                    icon: makeSVGIcon('🚚', 38), zIndex: 200
+                });
+            } else {
+                truckMarker.setPosition(pos);
+            }
+            document.getElementById('trackingPanel').style.display = 'flex';
+            document.getElementById('statusText').innerHTML = `📡 <b>LIVE GPS</b>`;
+            if (msg.speed)
+                document.getElementById('speedValue').innerHTML =
+                    `<span style="color:#00d084">${msg.speed.toFixed(1)} km/h 📡</span>`;
+        }
+    };
+
+    ws.onerror = (e) => console.warn('WS error:', e);
+    ws.onclose = () => setTimeout(connectLiveFeed, 3000);
+}
+
+// ══════════════════════════════════════════
+//  GOOGLE MAPS INIT
+// ══════════════════════════════════════════
+window.initMap = async function() {
+    map = new google.maps.Map(document.getElementById('map'), {
+        center:    { lat: 9.9900, lng: 76.2950 },
+        zoom:      12,
+        styles:    DARK_STYLE,
+        mapTypeId: google.maps.MapTypeId.ROADMAP,
+        mapTypeControl:    false,
+        streetViewControl: false,
+        fullscreenControl: true,
+        zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_CENTER }
+    });
+    directionsService = new google.maps.DirectionsService();
+    infoWindow        = new google.maps.InfoWindow();
+
+    document.getElementById('loadingText').textContent = 'Loading orders from Firestore...';
+    const loaded = await loadOrdersFromDB();
+
+    if (loaded) {
+        renderDriverSections();
+        await drawMap();
+    } else {
+        document.getElementById('mapLoading').classList.add('hidden');
+    }
+
+    connectLiveFeed();
+};
+
+// ══════════════════════════════════════════
+//  BOOT — fetch API key from backend
+// ══════════════════════════════════════════
+async function loadGoogleMaps() {
+    try {
+        document.getElementById('loadingText').textContent = 'Fetching config from backend...';
+        const res    = await fetch(`${BACKEND_URL}/config`);
+        const config = await res.json();
+
+        if (!config.google_maps_key || config.google_maps_key === 'fallback_key') {
+            throw new Error('GOOGLE_MAPS_API_KEY missing in .env');
+        }
+
+        document.getElementById('loadingText').textContent = 'Loading Google Maps...';
+        const script   = document.createElement('script');
+        script.src     = `https://maps.googleapis.com/maps/api/js?key=${config.google_maps_key}&callback=initMap&libraries=geometry`;
+        script.async   = true;
+        script.defer   = true;
+        script.onerror = () => {
+            document.getElementById('loadingText').textContent =
+                '❌ Google Maps failed to load. Check your API key.';
+        };
+        document.head.appendChild(script);
+
+    } catch(e) {
+        document.getElementById('loadingText').textContent =
+            `❌ Cannot reach backend at ${BACKEND_URL} — is it running?`;
+        document.getElementById('loadingSub').textContent  = e.message;
+        console.error('Boot error:', e);
+    }
+}
+
+window.addEventListener('load', loadGoogleMaps);
+</script>
+</body>
+</html>
